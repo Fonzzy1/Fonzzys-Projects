@@ -17,6 +17,16 @@
     </item>
     
     <item>
+      <title>Taylor Series approximations of ODEs: The Code</title>
+      <link>/2021/05/18/taylor-series-approximations-of-odes-the-code/</link>
+      <pubDate>Tue, 18 May 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/2021/05/18/taylor-series-approximations-of-odes-the-code/</guid>
+      <description>Now that we have an algorithm for approximating ODEs, whe can start implementing it in the form of code so we can start using it to solve problems.
+Since the code is a fairy simple implementation of the algorithm, I’m not going to go into it in much detail, but feel free to look at it on my github. What were going to look at today is how good this algorithm is and how it applies to apply it to a broad range of ODE problems.</description>
+    </item>
+    
+    <item>
       <title>About</title>
       <link>/about/</link>
       <pubDate>Fri, 23 Apr 2021 21:48:51 -0700</pubDate>

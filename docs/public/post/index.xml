@@ -16,5 +16,15 @@
       <description>If you ever start doing university level maths, physics, chemistry or even economics, you will most likely start running into differential equations. These are equations that describe functions in terms of their derivatives. Normally in these classes, at least at the start, all the problems are solvable by hand with some fairly rudimentary algebra and calculus. However, if you ever try and work with these problems in the real world, you will quickly realise that a lot of differential equations aren’t solvable.</description>
     </item>
     
+    <item>
+      <title>Taylor Series approximations of ODEs: The Code</title>
+      <link>/2021/05/18/taylor-series-approximations-of-odes-the-code/</link>
+      <pubDate>Tue, 18 May 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/2021/05/18/taylor-series-approximations-of-odes-the-code/</guid>
+      <description>Now that we have an algorithm for approximating ODEs, whe can start implementing it in the form of code so we can start using it to solve problems.
+Since the code is a fairy simple implementation of the algorithm, I’m not going to go into it in much detail, but feel free to look at it on my github. What were going to look at today is how good this algorithm is and how it applies to apply it to a broad range of ODE problems.</description>
+    </item>
+    
   </channel>
 </rss>

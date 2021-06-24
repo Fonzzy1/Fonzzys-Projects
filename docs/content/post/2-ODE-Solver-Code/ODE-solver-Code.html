@@ -1,0 +1,180 @@
+---
+title: "Taylor Series approximations of ODEs: The Code"
+author: Fonzzy
+date: 2021-05-18T00:00:00+00:00
+output: html_document
+---
+
+
+
+<p>Now that we have an <a href="https://fonzzys-projects.netlify.app/2021/05/18/taylor-series-approximations-of-odes-the-algorithm/">algorithm for approximating ODEs</a>, whe can start implementing it in the form of code so we can start using it to solve problems.</p>
+<p>Since the code is a fairy simple implementation of the algorithm, I’m not going to go into it in much detail, but feel free to look at it on my <a href="https://github.com/Fonzzy1/Fonzzys-Projects/tree/main/Differential%20Equations/One%20Dimension">github</a>. What were going to look at today is how good this algorithm is and how it applies to apply it to a broad range of ODE problems.</p>
+<div id="well-posed-odes" class="section level2">
+<h2>Well Posed ODEs</h2>
+<p>A well posed ODE meets the condition of uniqueness and existence, meaning that one and only one solution exists to the ODE. These conditions need to be met when approximating ODEs, as to ensure that the information we take from the approximation is meaningful. The well pointedness comes from the conditions placed on the ODE, which are stored within a condition vector that we used to define the system.
+Since all initial vectors and stepping functions will produce a result, this problem of wellpossedness can be reduced to seeing weather or not a unique initial vector can be found that matches the conditions given the stepping function.
+For an ODE of order k, the initial vector will have <span class="math inline">\(k+1\)</span> unknowns, <span class="math inline">\(f(x), f&#39;(x)...f^k(x)\)</span>, therefore <span class="math inline">\(k+1\)</span> pieces of information will be needed to uniquely determine this initial vector, and this would therefore guarantee uniqueness.
+Similarly, the information about the system cannot be mutually exclusive, such as <span class="math inline">\(f(0) = 2 , f(0) = 4\)</span> as this would mean that a soulution would not exist.</p>
+<p>The concept of well posedness is important as the algorithm will produce an output even if the problem is ill posed, therefore one will have to ensure it is well posed before applying the algorithm. This is done using this function;</p>
+<pre class="python"><code>def check_well_posedness(condition_vect):
+    known_conditions = []
+    ## Separate each piece of info into a row
+    for vect in condition_vect:
+        ## See additional information defined by definition of ODE
+        vect_transformed = adjustment_funtion(vect.T).T
+        k = 0
+        for value in vect_transformed[2:len(vect)]:
+            if not np.isnan(value):
+                ## [x, order of derivative, value], each row is a piece of information
+                known_conditions.append([vect[1], k, value])
+            k += 1
+
+    ## Remove Duplicates
+    known_conditions = np.unique(known_conditions,axis=0)
+
+    ##Find if value is defined twice differently,
+    range_of_def = []
+    for i in known_conditions:
+        range_of_def.append(i[0:2])
+
+    ## Contradicting information
+    if len(range_of_def) != len(np.unique(range_of_def,axis=0)):
+        return False, known_conditions, &#39;No Solution, contradictory conditions&#39;
+    ## Returns True if correct number of elements
+    elif len(known_conditions) == len(condition_vect[0]) - 2:
+        return True, known_conditions,&#39;&#39;
+    ## Else will Return False with the wrong number of conditions.
+    else:
+        return False, known_conditions, &#39;Non unique solution, wrong number of few conditions&#39;</code></pre>
+</div>
+<div id="finding-valid-initial-vectors" class="section level2">
+<h2>Finding valid initial vectors</h2>
+<p>For some problems, it is rather simple to determine the initial vector of the ODE, since it is given as part of the conditions. These are called initial value problems and approximatiing the solution is rather simple as the initial vector is allready known. In contrast there are also boundry value problems, where the condtions are placed in various places along the domain, normally at each end. The normal method to approximate these BVPs uses inverse matrices and can get quite messy, especially for large domains and small step size, however is guaranteed to give a solution on the first try. This is valuable when computational float_power is expensive or god forbid, you would have to work it out by hand, however this is not the case for us. Using the float_power of 21st century computing, we can simply brute force this problem by trying a heap of initial vectors and seeing which one best fits the condtions.</p>
+<p>In the general case this is done using the following function;</p>
+<pre class="python"><code>def find_best_initial_nonlin(search_min, search_max, xmin, xmax, search_step, vect_initial, condition_vect):
+    # Find All Possible initial vectors, where unknowns are np.NAN
+    search_permutations = [*it.combinations_with_replacement(np.arange(search_min, search_max + search_step, search_step),
+                                            np.count_nonzero(np.isnan(vect_initial)))]
+    nan_location = np.argwhere(np.isnan(vect_initial))
+    nan_location = nan_location[nan_location != 0]
+    vect_initial_poss = np.zeros((len(search_permutations), len(vect_initial)))
+    for i in range(0, len(search_permutations)):
+        vect_initial_poss[i] = vect_initial.T
+        vect_initial_poss[i][nan_location] = search_permutations[i]
+        ## This ensures only valid input vectors are met
+        vect_initial_poss[i] = adjustment_funtion(vect_initial_poss[i].T)
+
+    ## List of scores
+    ls_distance = []
+
+    # Run over range of possible vectors
+    for vect_initial in vect_initial_poss:
+        output = nonlin_IVP(xmin,xmax, np.reshape(vect_initial, (len(vect_initial), 1)), False)
+        ls_distance_single = []
+        h = vect_initial[0]
+        for vect in condition_vect:
+            index = int(math.floor((vect[1] - xmin) / h))
+            dist = np.linalg.norm(np.nan_to_num(output[index] - vect))
+            ls_distance_single.append(dist)
+            ls_distance_single.append(dist)
+        ls_distance.append(sum(ls_distance_single))
+
+    df_results = pd.DataFrame(vect_initial_poss)
+    df_results[&#39;dist&#39;] = ls_distance
+
+    best_index = df_results[[&#39;dist&#39;]].idxmin()
+
+    best_int_vect = vect_initial_poss[best_index].T
+    dist = df_results[&#39;dist&#39;][best_index].values
+    return (best_int_vect, dist, df_results)</code></pre>
+<p>Simulating the full range of the ODE can be quite slow, therefore a major improvement to the function can be made to the linear case.
+Remembering that:
+<span class="math display">\[ \begin{bmatrix}
+h\\
+x+h\\
+y(x+h)\\
+y&#39;(x+h)\\
+y&#39;&#39;(x+h)\\
+...\\
+y^{n}(x+h)\\
+\end{bmatrix} = T \cdot \begin{bmatrix}
+1 &amp; 0 &amp; 0 &amp; 0 &amp; 0 &amp;  ... &amp; 0\\
+1 &amp; 1 &amp; 0 &amp; 0 &amp; 0 &amp;  ... &amp; 0\\
+0 &amp; 0 &amp; 1 &amp; \frac{h}{1!} &amp; \frac{h^2}{2!} &amp;  ... &amp; \frac{h^n}{n!}\\
+0 &amp; 0 &amp; 0 &amp; 1 &amp; \frac{h}{1!} &amp;  ... &amp; \frac{h^{n-1}}{(n-1)!}\\
+0 &amp; 0 &amp; 0 &amp; 0 &amp; 1 &amp;  ... &amp; \frac{h^{n-2}}{(n-2)!}\\
+... &amp; ... &amp; ... &amp; ... &amp; ... &amp;  ... &amp; ...\\
+0 &amp; 0 &amp; 0 &amp; 0 &amp; 0 &amp;  ... &amp; 1\\
+\end{bmatrix} \cdot \begin{bmatrix}
+h\\
+x\\
+y(x)\\
+y&#39;(x)\\
+y&#39;&#39;(x)\\
+...\\
+y^{n}(x)\\
+\end{bmatrix}\]</span></p>
+<p>One can say:</p>
+<p><span class="math display">\[ \begin{bmatrix}
+h\\
+x+ k \cdot h\\
+y(x+ k \cdot h)\\
+y&#39;(x+ k \cdot h)\\
+y&#39;&#39;(x+ k \cdot h)\\
+...\\
+y^{n}(x+k \cdot h)\\
+\end{bmatrix} = ( T \cdot \begin{bmatrix}
+1 &amp; 0 &amp; 0 &amp; 0 &amp; 0 &amp;  ... &amp; 0\\
+1 &amp; 1 &amp; 0 &amp; 0 &amp; 0 &amp;  ... &amp; 0\\
+0 &amp; 0 &amp; 1 &amp; \frac{h}{1!} &amp; \frac{h^2}{2!} &amp;  ... &amp; \frac{h^n}{n!}\\
+0 &amp; 0 &amp; 0 &amp; 1 &amp; \frac{h}{1!} &amp;  ... &amp; \frac{h^{n-1}}{(n-1)!}\\
+0 &amp; 0 &amp; 0 &amp; 0 &amp; 1 &amp;  ... &amp; \frac{h^{n-2}}{(n-2)!}\\
+... &amp; ... &amp; ... &amp; ... &amp; ... &amp;  ... &amp; ...\\
+0 &amp; 0 &amp; 0 &amp; 0 &amp; 0 &amp;  ... &amp; 1\\
+\end{bmatrix})^k \cdot \begin{bmatrix}
+h\\
+x\\
+y(x)\\
+y&#39;(x)\\
+y&#39;&#39;(x)\\
+...\\
+y^{n}(x)\\
+\end{bmatrix}\]</span></p>
+<p>This property for the linear case means that we can check values without iterating over the whole domain, making the process for finding the initial vector much faster for the general case.</p>
+</div>
+<div id="finding-the-approximation-error" class="section level2">
+<h2>Finding the approximation error</h2>
+<p>Now that we know how to apply the algorithm to a wide range of ODEs, we can start looking at how good the approximations are. Using some classic ODEs we can compare the exact solution and the approximate solution.</p>
+<div id="example-1" class="section level3">
+<h3>Example 1</h3>
+<p><span class="math display">\[ f&#39;&#39;(x) = f(x) + x \]</span>
+<span class="math display">\[ f(0) = 0\]</span>
+<span class="math display">\[ f&#39;(0) = 0\]</span>
+<span class="math display">\[ 0 \leq x \leq pi^3 \]</span></p>
+<p>Converting this into the condition vector and transform matrix used int the approximations.</p>
+<pre class="python"><code>condition_vect = np.array([ [np.float_power(3,0), 0, 0, 0, np.NAN]])
+
+matrix_transform = np.array([[1, 0, 0, 0, 0],
+                             [0, 1, 0, 0, 0],
+                             [0, 0, 1, 0, 0],
+                             [0, 0, 0, 1, 0],
+                             [0, 1, 1, 0, 0]])</code></pre>
+<p>The known solution to this ODE is <span class="math inline">\(f(x) = \frac{1}{2}e^{x}-\frac{1}{2}e^{-x}-x = \sinh\left(x\right)-x\)</span>, and plotting this against the approximation;
+<img src="/post/2-ODE-Solver-Code/ODE-solver-Code_files/figure-html/unnamed-chunk-1-1.png" width="672" /></p>
+<p><img src="/post/2-ODE-Solver-Code/ODE-solver-Code_files/figure-html/unnamed-chunk-1-3.png" width="672" /></p>
+<p><img src="/post/2-ODE-Solver-Code/ODE-solver-Code_files/figure-html/unnamed-chunk-1-5.png" width="672" /></p>
+<p>You can see that as we take smaller and smaller values of h, the two lines get closer and closer until they are indistinguishable. It’s all well and good to say the two values are close, but we need a way to numerical determine the amount of error in the approximation. To do this, we can define an error function such that:</p>
+<p><span class="math display">\[ Error(h) = \int_{x_{min}}^{x_{max}} |f_{aprox}(x) - f_{actual}(x)| \,dx  \]</span>
+<span class="math display">\[Error(h) = \sum_{i=0}^{\frac{x_{max}-x_{min}}{h}} h \cdot |f_{aprox}(x_i) - f_{actual}(x_i)| \]</span></p>
+<p>We can now plot this function for various values of h:</p>
+<pre><code>## [&lt;matplotlib.lines.Line2D object at 0x7f62846f4f10&gt;]</code></pre>
+<pre><code>## [&lt;matplotlib.lines.Line2D object at 0x7f6284152340&gt;]</code></pre>
+<pre><code>## Text(0.5, 1.0, &#39;ln(h) vs ln(Error(h))&#39;)</code></pre>
+<p><img src="/post/2-ODE-Solver-Code/ODE-solver-Code_files/figure-html/unnamed-chunk-1-7.png" width="672" /></p>
+<p>Looking at this line, we can say that the function, <span class="math inline">\(Error(h) = O(h)\)</span> however this seems inconsistent with the <span class="math inline">\(O(h^2)\)</span> error found in the previous part. However, we need to remember that the two errors are different</p>
+<pre><code>## [&lt;matplotlib.lines.Line2D object at 0x7f6284012730&gt;]</code></pre>
+<pre><code>## [&lt;matplotlib.lines.Line2D object at 0x7f6284012c10&gt;]</code></pre>
+<pre><code>## Text(0.5, 1.0, &#39;ln(h) vs Ln(error for one step)&#39;)</code></pre>
+<p><img src="/post/2-ODE-Solver-Code/ODE-solver-Code_files/figure-html/unnamed-chunk-1-9.png" width="672" /></p>
+</div>
+</div>
